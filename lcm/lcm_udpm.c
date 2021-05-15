@@ -1,11 +1,15 @@
+#define _GNU_SOURCE
+
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <math.h>
+#include <sched.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
 
 #ifndef WIN32
 #include <arpa/inet.h>
@@ -539,6 +543,27 @@ static lcm_buf_t *udp_read_packet(lcm_udpm_t *lcm)
  * LCM packets from the network and queues them locally. */
 static void *recv_thread(void *user)
 {
+    // HHHHAAAACCCK
+    printf("Howdy! from lcm_udpm, recv_thread\n");
+    {
+        struct sched_param sch_param;
+        sch_param.sched_priority = 20;
+        if (sched_setscheduler(0, SCHED_RR, &sch_param) != 0) {
+            perror("lcm_udpm, recv_thread: cannot set realtime priority");
+        }
+        printf("  rr priority set: %d\n", sch_param.sched_priority);
+    }
+    {
+        const size_t reserved_core = 14;
+        cpu_set_t cpu_set;
+        CPU_ZERO(&cpu_set);
+        CPU_SET(reserved_core, &cpu_set);
+        if (sched_setaffinity(0, sizeof(cpu_set), &cpu_set) != 0) {
+            perror("lcm_udpm, recv_thread: cannot set cpu affinity");
+        }
+        printf("  cpu affinity set: %d\n", reserved_core);
+    }
+
 #ifdef G_OS_UNIX
     // Mask out all signals on this thread.
     sigset_t mask;
